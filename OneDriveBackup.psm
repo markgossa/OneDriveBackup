@@ -8,13 +8,22 @@ function Start-OneDriveBackup
         $InstanceId,
         [Parameter(Mandatory = $true)]
         [string]        
-        $PasswordFilePath = 'C:\Scripts\OneDrive Backup\Password.txt',
+        $PasswordFilePath,
         [Parameter(Mandatory = $true)]
         [string]        
-        $VeeamConfig = 'C:\Scripts\OneDrive Backup\VAFW-Weekly-Backup-Config.xml',
+        $Include,
         [Parameter(Mandatory = $true)]
         [string]        
-        $Include = 'E:\'
+        $Sender,
+        [Parameter(Mandatory = $true)]
+        [string]        
+        $Recipient,
+        [Parameter(Mandatory = $true)]
+        [string]        
+        $SmtpServer,
+        [Parameter(Mandatory = $true)]
+        [string]        
+        $BackupName                    
     )
 
     function Dismount-USBHardDisk
@@ -30,7 +39,7 @@ function Start-OneDriveBackup
         
         $USBDeviceStatus = (Get-PnpDevice -InstanceId $InstanceId).Status
         
-        if ($USBDevice.Status -eq 'Error')
+        if ($USBDeviceStatus -eq 'Error')
         {
             return $true
         }
@@ -76,8 +85,7 @@ function Start-OneDriveBackup
             else 
             {
                 return $false    
-            }
-            
+            }            
         }
     }
 
@@ -133,6 +141,55 @@ function Start-OneDriveBackup
         wbadmin start backup -backupTarget:$BackupTarget -include:$Include -vssFull -quiet
     }
 
+    function Get-WindowsServerBackupStatus
+    {
+        param
+        (
+            [Parameter(Mandatory = $true)]
+            [array]
+            $WindowsServerBackupOutput
+        )
+
+        $WindowsServerBackupLogFile = $WindowsServerBackupOutput | Where-Object {$_ -match '.log'}
+        if ((Get-Content -Path $WindowsServerBackupLogFile) -match 'succeeded')
+        {
+            return $true
+        }
+        else 
+        {
+            return $false
+        }
+    }
+
+    function Unlock-USBHardDisk
+    {
+        param
+        (
+            [Parameter(Mandatory = $true)]
+            [string]
+            $DriveLetter,
+            [Parameter(Mandatory = $true)]
+            [securestring]
+            $Password
+        )
+
+        if ((Get-BitLockerVolume $DriveLetter).LockStatus -eq 'Ok')
+        {
+            return $true
+        }
+        else 
+        {        
+            if ((Unlock-BitLocker -MountPoint $DriveLetter -Password $password).LockStatus -eq 'Unlocked')
+            {
+                return $true
+            }
+            else 
+            {
+                return $false    
+            }
+        }
+    }
+
     class BackupOutput
     {
         [boolean]
@@ -151,6 +208,8 @@ function Start-OneDriveBackup
 
     $BackupOutput = New-Object BackupOutput
 
+    $Password = Get-Content $PasswordFilePath | ConvertTo-SecureString 
+
     # Mount the USB disk if needed
     if ((Get-USBHardDiskStatus -InstanceId $InstanceId) -eq 'OK')
     {
@@ -166,10 +225,13 @@ function Start-OneDriveBackup
     $BackupOutput.DriveLetter = $DriveLetter
 
     # Unlock the USB disk
-    Unlock-BitLocker -MountPoint $DriveLetter -Password $password
+    $BackupOutput.USBHardDiskUnlocked = Unlock-USBHardDisk -DriveLetter $DriveLetter -Password $Password
 
     # Perform the backup
-    Start-WindowsServerBackup -DriveLetter $DriveLetter -Include $Include
+    $WindowsServerBackupOutput = Start-WindowsServerBackup -DriveLetter $DriveLetter -Include $Include
+
+    # Check the backup was successful
+    $BackupOutput.BackupSuccessful = Get-WindowsServerBackupStatus -WindowsServerBackupOutput $WindowsServerBackupOutput
 
     # Lock the USB disk
     $BackupOutput.USBHardDiskLocked = Lock-USBHardDisk -DriveLetter $DriveLetter
@@ -177,9 +239,13 @@ function Start-OneDriveBackup
     # Dismount the USB disk after the backup completes
     $BackupOutput.USBHardDiskDismounted = Dismount-USBHardDisk -InstanceId $InstanceId
 
+    # Send notification email
+    if ($BackupOutput.BackupSuccessful -eq $true -and $BackupOutput.USBHardDiskLocked -eq $true)
+    {
+        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "$BackupName Successful"
+    }
+    else 
+    {
+        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "$BackupName Failed"
+    }
 }
-
-
-# Bug with Dismount-USBHardDisk (Generic failure)
-
-# Create function to unlock the USB drive

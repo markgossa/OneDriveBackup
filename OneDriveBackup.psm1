@@ -78,7 +78,7 @@ function Start-OneDriveBackup
         }
         else 
         {
-            if ((Lock-BitLocker -MountPoint $DriveLetter).LockStatus -eq 'Locked')
+            if ((Lock-BitLocker -MountPoint $DriveLetter -ForceDismount).LockStatus -eq 'Locked')
             {
                 return $true
             }

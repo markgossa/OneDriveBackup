@@ -62,7 +62,6 @@ function Start-OneDriveBackup
         
         return $USBDeviceStatus
     }
-
     function Lock-USBHardDisk
     {
         param
@@ -123,42 +122,6 @@ function Start-OneDriveBackup
         $DriveLetter = (Get-Partition -DiskNumber $Disk.DiskNumber).DriveLetter
 
         return $DriveLetter
-    }
-
-    function Start-WindowsServerBackup
-    {
-        param
-        (
-            [Parameter(Mandatory = $true)]
-            [string]
-            $DriveLetter,
-            [Parameter(Mandatory = $true)]
-            [string]
-            $Include
-        )
-
-        $BackupTarget = $DriveLetter + ":\"
-        wbadmin start backup -backupTarget:$BackupTarget -include:$Include -vssFull -quiet
-    }
-
-    function Get-WindowsServerBackupStatus
-    {
-        param
-        (
-            [Parameter(Mandatory = $true)]
-            [array]
-            $WindowsServerBackupOutput
-        )
-
-        $WindowsServerBackupLogFile = $WindowsServerBackupOutput | Where-Object {$_ -match '.log'}
-        if ((Get-Content -Path $WindowsServerBackupLogFile) -match 'succeeded')
-        {
-            return $true
-        }
-        else 
-        {
-            return $false
-        }
     }
 
     function Unlock-USBHardDisk
@@ -228,10 +191,7 @@ function Start-OneDriveBackup
     $BackupOutput.USBHardDiskUnlocked = Unlock-USBHardDisk -DriveLetter $DriveLetter -Password $Password
 
     # Perform the backup
-    $WindowsServerBackupOutput = Start-WindowsServerBackup -DriveLetter $DriveLetter -Include $Include
-
-    # Check the backup was successful
-    $BackupOutput.BackupSuccessful = Get-WindowsServerBackupStatus -WindowsServerBackupOutput $WindowsServerBackupOutput
+    . "C:\Program Files\Veeam\Endpoint Backup\Veeam.EndPoint.Manager.exe" /backup
 
     # Lock the USB disk
     $BackupOutput.USBHardDiskLocked = Lock-USBHardDisk -DriveLetter $DriveLetter
@@ -240,12 +200,16 @@ function Start-OneDriveBackup
     $BackupOutput.USBHardDiskDismounted = Dismount-USBHardDisk -InstanceId $InstanceId
 
     # Send notification email
-    if ($BackupOutput.BackupSuccessful -eq $true -and $BackupOutput.USBHardDiskLocked -eq $true)
+    if ($BackupOutput.USBHardDiskLocked -eq $true -and $BackupOutput.USBHardDiskLocked -eq $true)
     {
-        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "$BackupName Successful"
+        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "$BackupName - Disk locked and unmounted"
     }
-    else 
+    elseif ($BackupOutput.USBHardDiskLocked -eq $false)
     {
-        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "$BackupName Failed"
+        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "$BackupName - Disk not unmounted"
+    }
+    elseif ($BackupOutput.USBHardDiskDismounted -eq $false)
+    {
+        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "$BackupName - Disk not locked"
     }
 }

@@ -202,14 +202,14 @@ function Start-OneDriveBackup
     # Send notification email
     if ($BackupOutput.USBHardDiskLocked -eq $true -and $BackupOutput.USBHardDiskLocked -eq $true)
     {
-        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "$BackupName - Disk locked and unmounted"
+        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "[Success] $BackupName - Disk locked and unmounted"
     }
     elseif ($BackupOutput.USBHardDiskLocked -eq $false)
     {
-        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "$BackupName - Disk not unmounted"
+        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "[Warning] $BackupName - Disk not unmounted"
     }
     elseif ($BackupOutput.USBHardDiskDismounted -eq $false)
     {
-        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "$BackupName - Disk not locked"
+        Send-MailMessage -To $Recipient -From $Sender -SmtpServer $SmtpServer -Subject "[Fail] $BackupName - Disk not locked"
     }
 }

@@ -119,8 +119,8 @@ function Start-OneDriveBackup
         )
 
         $Disk = Get-Disk | Where-Object {$_.Path -match ($InstanceId -split "\\")[-1]}
-        $DriveLetter = (Get-Partition -DiskNumber $Disk.DiskNumber).DriveLetter
-
+        $DriveLetter = (Get-Partition -DiskNumber $Disk.DiskNumber | Where-Object {$_.DriveLetter}).DriveLetter       
+        
         return $DriveLetter
     }
 
